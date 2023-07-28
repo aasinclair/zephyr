@@ -26,6 +26,9 @@ static const struct device *charger = DEVICE_DT_GET(DT_NODELABEL(npm1300_ek_char
 
 static const struct device *leds = DEVICE_DT_GET(DT_NODELABEL(npm1300_ek_leds));
 
+const struct gpio_dt_spec host_pof = GPIO_DT_SPEC_GET_OR(DT_NODELABEL(pofhost), gpios, {0});
+const struct gpio_dt_spec pmic_pof = GPIO_DT_SPEC_GET_OR(DT_NODELABEL(pofpmic), gpios, {0});
+
 void configure_ui(void)
 {
 	int ret;
@@ -47,6 +50,27 @@ void configure_ui(void)
 	if (!device_is_ready(leds)) {
 		printk("Error: led device is not ready\n");
 		return;
+	}
+}
+
+static void pof_callback(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
+{
+	printk("Pof detected\n");
+}
+
+void configure_powerloss(void)
+{
+	static struct gpio_callback pof_cb;
+
+	/* If pof gpios are defined in the overlay, set up interrupt and callback */
+	if (gpio_is_ready_dt(&host_pof) && gpio_is_ready_dt(&pmic_pof)) {
+		gpio_pin_configure_dt(&host_pof, 0);
+		gpio_pin_configure_dt(&pmic_pof, 0);
+
+		gpio_init_callback(&pof_cb, pof_callback, BIT(host_pof.pin));
+		gpio_add_callback(host_pof.port, &pof_cb);
+
+		gpio_pin_interrupt_configure_dt(&host_pof, GPIO_INT_EDGE_TO_ACTIVE);
 	}
 }
 
@@ -78,6 +102,8 @@ void read_sensors(void)
 int main(void)
 {
 	configure_ui();
+
+	configure_powerloss();
 
 	if (!device_is_ready(regulators)) {
 		printk("Error: Regulator device is not ready\n");

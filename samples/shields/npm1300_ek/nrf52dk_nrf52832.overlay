@@ -2,6 +2,9 @@
  * Copyright (C) 2023 Nordic Semiconductor ASA
  * SPDX-License-Identifier: Apache-2.0
  */
+
+#include "dt-bindings/gpio/nordic-npm1300-gpio.h"
+
  &i2c0_default {
 	group1 {
 		bias-pull-up;
@@ -15,4 +18,16 @@
 
 &npm1300_ek_buck1 {
         regulator-init-microvolt = <2000000>;
+};
+
+/ {
+power_loss_warn {
+	compatible = "gpio-keys";
+	pofhost: pof_host {
+		gpios = <&gpio0 23 GPIO_ACTIVE_LOW>;
+	};
+	pofpmic: pof_pmic {
+		gpios = <&npm1300_ek_gpio 4 NPM1300_GPIO_PWRLOSSWARN_ON>;
+	};
+};
 };
