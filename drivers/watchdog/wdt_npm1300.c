@@ -13,14 +13,16 @@
 #include <zephyr/drivers/mfd/npm1300.h>
 #include <zephyr/dt-bindings/gpio/nordic-npm1300-gpio.h>
 
-/* nPM1300 TIMER base address */
+/* nPM1300 register base addresses */
 #define TIME_BASE 0x07U
+#define ERR_BASE  0x0EU
 
-/* nPM1300 timer register offsets */
+/* nPM1300 register offsets */
 #define TIME_OFFSET_START     0x00U
 #define TIME_OFFSET_STOP      0x01U
 #define TIME_OFFSET_WDOG_KICK 0x04U
 #define TIME_OFFSET_MODE      0x05U
+#define ERR_OFFSET_SCRATCH0   0x01U
 
 /* nPM1300 timer modes */
 #define TIME_MODE_BOOT  0x00U
@@ -28,9 +30,12 @@
 #define TIME_MODE_RESET 0x02U
 #define TIME_MODE_GEN   0x03U
 
+#define SCRATCH0_BOOTMON_MASK 0x01U
+
 struct wdt_npm1300_config {
 	const struct device *mfd;
 	struct gpio_dt_spec reset_gpios;
+	bool boot_monitor;
 };
 
 struct wdt_npm1300_data {
@@ -151,6 +156,20 @@ static int wdt_npm1300_init(const struct device *dev)
 		}
 	}
 
+	/* Configure boot monitor */
+	ret = mfd_npm1300_reg_write(config->mfd, TIME_BASE, TIME_OFFSET_STOP, 1U);
+	if (ret < 0) {
+		return ret;
+	}
+
+	uint8_t data = config->boot_monitor ? SCRATCH0_BOOTMON_MASK : 0;
+
+	ret = mfd_npm1300_reg_update(config->mfd, ERR_BASE, ERR_OFFSET_SCRATCH0, data,
+				     SCRATCH0_BOOTMON_MASK);
+	if (ret < 0) {
+		return ret;
+	}
+
 	return 0;
 }
 
@@ -160,7 +179,7 @@ static int wdt_npm1300_init(const struct device *dev)
 	static const struct wdt_npm1300_config config##n = {                                       \
 		.mfd = DEVICE_DT_GET(DT_INST_PARENT(n)),                                           \
 		.reset_gpios = GPIO_DT_SPEC_INST_GET_OR(n, reset_gpios, {0}),                      \
-	};                                                                                         \
+		.boot_monitor = DT_INST_PROP(n, boot_monitor)};                                    \
                                                                                                    \
 	DEVICE_DT_INST_DEFINE(n, &wdt_npm1300_init, NULL, &data##n, &config##n, POST_KERNEL,       \
 			      CONFIG_WDT_NPM1300_INIT_PRIORITY, &wdt_npm1300_api);
