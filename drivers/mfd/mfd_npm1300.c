@@ -261,10 +261,17 @@ int mfd_npm1300_hibernate(const struct device *dev, uint32_t time_ms)
 int mfd_npm1300_add_callback(const struct device *dev, struct gpio_callback *callback)
 {
 	struct mfd_npm1300_data *data = dev->data;
+	struct gpio_callback *peek_cb;
+	gpio_port_pins_t mask = callback->pin_mask;
+
+	/* Create mask of events that need to be enabled */
+	SYS_SLIST_FOR_EACH_CONTAINER(&data->callbacks, peek_cb, node) {
+		mask &= ~peek_cb->pin_mask;
+	}
 
 	/* Enable interrupts for specified events */
 	for (int i = 0; i < NPM1300_EVENT_MAX; i++) {
-		if ((callback->pin_mask & BIT(i)) != 0U) {
+		if ((mask & BIT(i)) != 0U) {
 			/* Clear pending interrupt */
 			int ret = mfd_npm1300_reg_write(data->dev, MAIN_BASE,
 							event_reg[i].offset + MAIN_OFFSET_CLR,
@@ -289,8 +296,41 @@ int mfd_npm1300_add_callback(const struct device *dev, struct gpio_callback *cal
 int mfd_npm1300_remove_callback(const struct device *dev, struct gpio_callback *callback)
 {
 	struct mfd_npm1300_data *data = dev->data;
+	struct gpio_callback *peek_cb;
+	gpio_port_pins_t mask = callback->pin_mask;
 
-	return gpio_manage_callback(&data->callbacks, callback, false);
+	int ret = gpio_manage_callback(&data->callbacks, callback, false);
+
+	if (ret < 0) {
+		return ret;
+	}
+
+	/* Create mask of events that need to be disabled */
+	SYS_SLIST_FOR_EACH_CONTAINER(&data->callbacks, peek_cb, node) {
+		mask &= ~peek_cb->pin_mask;
+	}
+
+	/* Disable interrupts for specified events */
+	for (int i = 0; i < NPM1300_EVENT_MAX; i++) {
+		if ((mask & BIT(i)) != 0U) {
+			ret = mfd_npm1300_reg_write(data->dev, MAIN_BASE,
+						    event_reg[i].offset + MAIN_OFFSET_INTENCLR,
+						    event_reg[i].mask);
+			if (ret < 0) {
+				return ret;
+			}
+
+			/* Clear pending interrupt */
+			ret = mfd_npm1300_reg_write(data->dev, MAIN_BASE,
+						    event_reg[i].offset + MAIN_OFFSET_CLR,
+						    event_reg[i].mask);
+			if (ret < 0) {
+				return ret;
+			}
+		}
+	}
+
+	return 0;
 }
 
 #define MFD_NPM1300_DEFINE(inst)                                                                   \
