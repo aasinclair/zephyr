@@ -236,6 +236,10 @@ int npm1300_charger_channel_get(const struct device *dev, enum sensor_channel ch
 		valp->val1 = data->error;
 		valp->val2 = 0;
 		break;
+	case SENSOR_CHAN_NPM1300_CHARGER_VBUSIN:
+		valp->val1 = data->vbus_stat;
+		valp->val2 = 0;
+		break;
 	case SENSOR_CHAN_GAUGE_DESIRED_CHARGING_CURRENT:
 		valp->val1 = config->current_microamp / 1000000;
 		valp->val2 = config->current_microamp % 1000000;
